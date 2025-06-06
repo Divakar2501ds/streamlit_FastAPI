@@ -1,15 +1,29 @@
 
-from fastapi import FastAPI, UploadFile, File, Form, Depends ,APIRouter ,HTTPException ,Query
+from fastapi import Depends ,APIRouter ,HTTPException ,Query
 from sqlalchemy.orm import Session
-import shutil
-from PIL import Image , ImageOps
-import os
-from typing import List 
-from database import database
 from database.database import get_db
 from database.models import Cart, User, Product ,Category
-
+from database.models import User
+from auth.handler import get_current_user
 router = APIRouter()
+
+
+
+""""
+Adding products in a cart using user_id , category_id and product_id as a query parameters
+Input:
+    user_id: int 
+    category_id: int
+    product_id: int
+    quantity: int 
+Output:
+        user_id:int
+        category_id :int
+        product_id:int
+        quantity:int
+        price_at_time:int
+
+"""
 
 @router.post("/add_to_cart")
 def add_to_cart_by_email(
@@ -17,75 +31,112 @@ def add_to_cart_by_email(
     category_id: int = Query(...),
     product_id: int = Query(...),
     quantity: int = Query(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: str = Depends(get_current_user)
 ):
-    user = db.get(User, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
-    existing_cart_item = (
-            db.query(Cart)
-            .filter(
-                Cart.user_id == user.id,
-                Cart.category_id == category_id,
-                Cart.product_id == product_id
-            )
-            .first()
-        )    
-    if existing_cart_item:
-        raise HTTPException(status_code =409 ,detail="Item already there in your cart")
+    try:
+        user1 = db.get(User, user_id)
+        if not user1:
+            raise HTTPException(status_code=404, detail="User not found.")
+        existing_cart_item = (
+                db.query(Cart)
+                .filter(
+                    Cart.user_id == user1.id,
+                    Cart.category_id == category_id,
+                    Cart.product_id == product_id
+                )
+                .first()
+            )    
+        if existing_cart_item:
+            raise HTTPException(status_code =409 ,detail="Item already there in your cart")
 
-    category = db.get(Category, category_id)
-    if not category:
-        raise HTTPException(status_code=404, detail="Category not found.")
+        category = db.get(Category, category_id)
+        if not category:
+            raise HTTPException(status_code=404, detail="Category not found.")
 
-    product = db.get(Product, product_id)
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found.")
-    total_price = product.price * quantity
+        product = db.get(Product, product_id)
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found.")
+        total_price = product.price * quantity
 
-    cart_item = Cart(
-        user_id=user.id,
-        category_id = category.category_id,
-        product_id=product.product_id,
-        quantity=quantity,
-        price_at_time=total_price
-    )
+        cart_item = Cart(
+            user_id=user1.id,
+            category_id = category.category_id,
+            product_id=product.product_id,
+            quantity=quantity,
+            price_at_time=total_price
+        )
 
-    db.add(cart_item)
-    db.commit()
-    db.refresh(cart_item)
+        db.add(cart_item)
+        db.commit()
+        db.refresh(cart_item)
 
-    return {"message": "Added to cart", "price_at_time": cart_item.price_at_time}
+        return {"message": "Added to cart", "price_at_time": cart_item.price_at_time ,"user":user}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
+
+"""
+getting particular user's cart details using user_id as a query parameter
+Input:
+    user_id : int
+output:
+            "product_id": int
+            "category_id": int
+            "product_name":str
+            "image_url": url
+            "price_per_unit":int
+            "quantity": int
+            "price_at_time": int
+"""
 
 @router.get("/cart")
-def get_cart_items(user_id: int = Query(...), db: Session = Depends(get_db)):
-    user = db.get(User, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
+def get_cart_items(user_id: int = Query(...), db: Session = Depends(get_db),user: str = Depends(get_current_user)):
+    try:
 
-    cart_items = (
-        db.query(Cart, Product)
-        .join(Product, Cart.product_id == Product.product_id)
-        .filter(Cart.user_id == user_id)
-        .all()
-    )
+        user = db.get(User, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found.")
 
-    result = []
-    for cart, product in cart_items:
-        result.append({
-            "product_id": product.product_id,
-            "category_id": cart.category_id,
-            "product_name": product.product_name,
-            "image_url": product.image_url,
-            "price_per_unit": product.price,
-            "quantity": cart.quantity,
-            "price_at_time": cart.price_at_time,
-        })
+        cart_items = (
+            db.query(Cart, Product)
+            .join(Product, Cart.product_id == Product.product_id)
+            .filter(Cart.user_id == user_id)
+            .all()
+        )
 
-    return result
+        result = []
+        for cart, product in cart_items:
+            result.append({
+                "product_id": product.product_id,
+                "category_id": cart.category_id,
+                "product_name": product.product_name,
+                "image_url": product.image_url,
+                "price_per_unit": product.price,
+                "quantity": cart.quantity,
+                "price_at_time": cart.price_at_time,
+            })
+
+        return {"message":"list of items", "data": result, "status_code":200 ,"user":user}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
+
+
+
+
+"""
+updating quantity using user_id , category_id, product_id as query parameters
+Input:
+    user_id: int
+    product_id: int
+    quantity: int
+    category_id:int
+Output:
+
+
+"""
 @router.patch("/cart/update_quantity")
 def update_cart_quantity(
     user_id: int = Query(...),
@@ -93,42 +144,60 @@ def update_cart_quantity(
     quantity: int = Query(...),
     category_id:int =Query(...),
     db: Session = Depends(get_db)
+    ,user: str = Depends(get_current_user)
 ):
-    cart_item = (
-        db.query(Cart)
-        .filter(Cart.user_id == user_id,Cart.category_id == category_id, Cart.product_id == product_id )
-        .first()
-    )
+    try:
 
-    if not cart_item:
-        raise HTTPException(status_code=404, detail="Cart item not found.")
+        cart_item = (
+            db.query(Cart)
+            .filter(Cart.user_id == user_id,Cart.category_id == category_id, Cart.product_id == product_id )
+            .first()
+        )
 
-    product = db.get(Product, product_id)
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found.")
+        if not cart_item:
+            raise HTTPException(status_code=404, detail="Cart item not found.")
 
-    cart_item.quantity = quantity
-    cart_item.price_at_time = product.price * quantity
+        product = db.get(Product, product_id)
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found.")
 
-    db.commit()
-    db.refresh(cart_item)
+        cart_item.quantity = quantity
+        cart_item.price_at_time = product.price * quantity
 
-    return {"message": "Cart quantity updated successfully", "new_total": cart_item.price_at_time}
+        db.commit()
+        db.refresh(cart_item)
+
+        return {"message": "Cart quantity updated successfully", "new_total": cart_item.price_at_time }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+        
+
+"""
+Deleting item in a cart using user_id , category_id, product_id as query parameters
+Input:
+    user_id: int
+    product_id: int
+    category_id:int
+
+"""
 @router.delete("/delete_item")
 def delete_item(    user_id: int = Query(...),
     product_id: int = Query(...),
     category_id:int =Query(...),
-    db: Session = Depends(get_db)):
-    cart_item = (
-    db.query(Cart).filter(Cart.user_id == user_id,Cart.category_id == category_id, Cart.product_id == product_id ).first() )
-    if not cart_item:
-        raise HTTPException(status_code=404, detail="Cart item not found.")
+    db: Session = Depends(get_db),user: str = Depends(get_current_user)):
+    try:
 
-    product = db.get(Product, product_id)
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found.")
-    db.delete(cart_item)
-    db.commit()
-    return {"message": "Cart item deleted successfully"}
+        cart_item = (
+        db.query(Cart).filter(Cart.user_id == user_id,Cart.category_id == category_id, Cart.product_id == product_id ).first() )
+        if not cart_item:
+            raise HTTPException(status_code=404, detail="Cart item not found.")
 
+        product = db.get(Product, product_id)
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found.")
+        db.delete(cart_item)
+        db.commit()
+        return {"message": "Cart item deleted successfully","data":cart_item , "status_code":200 ,"user":user}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 

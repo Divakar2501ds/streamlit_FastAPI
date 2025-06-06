@@ -1,22 +1,36 @@
 
-from fastapi import FastAPI, UploadFile, File, Form, Depends ,APIRouter ,HTTPException ,Query
+from fastapi import  UploadFile, File, Form, Depends ,APIRouter ,HTTPException
 from sqlalchemy.orm import Session
 import shutil
-from PIL import Image , ImageOps
+from config import STATIC_DIR
 import os
-from typing import List 
+from auth.handler import get_current_user
 from database import database
 from database.models import Product 
-from schemas.pro import Createproduct 
-from fastapi.staticfiles import StaticFiles
 import shutil
-app = FastAPI()
 
 router = APIRouter()
 
 
 
 
+
+"""
+Add product 
+    Input:
+        product_name: str
+        product_description: str
+        price: int
+        category_id:int
+        file: UploadFile
+    Output:
+        product_name: str
+        product_description: str
+        price: int
+        category_id:int
+        image_url : url
+
+"""
 @router.post("/add_product")
 def add_product(
     product_name: str = Form(...),
@@ -24,10 +38,9 @@ def add_product(
     price: int = Form(...),
     category_id: int = Form(...),
     file: UploadFile = File(...),
-    db: Session = Depends(database.get_db)
+    db: Session = Depends(database.get_db),user: str = Depends(get_current_user)
 ):
     try :
-        STATIC_DIR = "/home/ib-40/Downloads/newregister/static"
         os.makedirs(STATIC_DIR, exist_ok=True)
 
         image_path = os.path.join(STATIC_DIR, file.filename)
@@ -45,55 +58,101 @@ def add_product(
         db.add(new_product)
         db.commit()
 
-        return {"message": "Product added"}
+        return {"message": "Product added" ,"data":new_product , "status_code":200 ,"user":user }
 
     except Exception as e:
 
         raise HTTPException(status_code=500, detail=str(e))
-@router.get("/get_product")
-def get_product(db: Session = Depends(database.get_db)):
-    productlist = db.query(
-        Product.product_name,
-        Product.price ,
-        Product.category_id,
-        Product.product_description,
-        Product.image_url
-    ).all()
+    
 
-    data = [
-        {
-            "product_name": pro.product_name,
-            "price":pro.price,
-            "product_description": pro.product_description,
-            "image_url": pro.image_url,
-        }
-        for pro in productlist
-    ]
 
-    return data
 
+""""
+getting products based on category using category_id
+Input:
+    category_id : int
+
+Output:
+        product_name: str
+        product_description: str
+        price: int
+        category_id:int
+        image_url : url
+
+    
+"""
 @router.get("/products/category/{category_id}")
-def get_products_by_category(category_id: int, db: Session = Depends(database.get_db)):
-    products = db.query(Product).filter(Product.category_id == category_id).all()
-    return products
+def get_products_by_category(category_id: int, db: Session = Depends(database.get_db),user: str = Depends(get_current_user)):
+    try:
+        products = db.query(Product).filter(Product.category_id == category_id).all()
+        return {"message": "products","data":products, "status_code":200,"user":user}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 
+""""
+Getting product  details based on product_id 
+Input:
+    product_id : int 
+Output:
+        product_name: str
+        product_description: str
+        price: int
+        category_id:int
+        image_url : url
+
+"""
 @router.get("/products/product/{product_id}")
-def get_product_details_by_product(product_id: int, db: Session = Depends(database.get_db)):
-    products = db.query(Product).filter(Product.product_id == product_id).first()
-    return products
+def get_product_details_by_product(product_id: int, db: Session = Depends(database.get_db),user: str = Depends(get_current_user)):
+    try:
+        products = db.query(Product).filter(Product.product_id == product_id).first()
+        return {"message": "products","data":products, "status_code":200,"user":user}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/delete_category/{product_id}") 
-def delete_category(product_id: int, db: Session = Depends(database.get_db)): 
-    product = db.query(Product).filter(Product.product_id == product_id).first()
-    if not product:
-        raise HTTPException(status_code=404, detail="product not found")
-    product.is_deleted = True
-    db.commit()
-    return {"message": "Category deleted"}
 
+"""
+Deleting product using product id 
+Input:
+    product_id : int 
+Output:
+        deleted 
+
+"""
+
+@router.delete("/delete_product/{product_id}") 
+def delete_product(product_id: int, db: Session = Depends(database.get_db),user: str = Depends(get_current_user)): 
+    try:
+            
+        product = db.query(Product).filter(Product.product_id == product_id).first()
+        if not product:
+            raise HTTPException(status_code=404, detail="product not found")
+        product.is_deleted = True
+        db.commit()
+        return {"message": "Product deleted", "data":product, "status_code":200,"user":user}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+"""
+update product 
+    Input:
+        product_name: str
+        product_description: str
+        price: int
+        product_id:int
+        file: UploadFile
+    Output:
+        product_name: str
+        product_description: str
+        price: int
+        product_id:int
+        image_url : url
+
+"""
 
 @router.patch("/update_product/{product_id}")
 def update_product(
@@ -101,9 +160,9 @@ product_id: int,
 product_name: str = Form(...),
 product_description: str = Form(...),
 price: int = Form(...),
-category_id: int = Form(...),
 file: UploadFile = File(None), 
-db: Session = Depends(database.get_db)
+db: Session = Depends(database.get_db),
+user: str = Depends(get_current_user)
 ):
     product = db.query(Product).filter(Product.product_id == product_id).first()
     try:
@@ -111,7 +170,6 @@ db: Session = Depends(database.get_db)
             raise HTTPException(status_code=404, detail="Product not found")
 
         if file:
-            STATIC_DIR = "/home/ib-40/Downloads/newregister/static"
             os.makedirs(STATIC_DIR, exist_ok=True)
 
             image_path = os.path.join(STATIC_DIR, file.filename)
@@ -127,9 +185,6 @@ db: Session = Depends(database.get_db)
 
         if price is not None:
             product.price = price
-
-        if category_id is not None:
-            product.category_id = category_id
 
             db.commit()
     except Exception as e:

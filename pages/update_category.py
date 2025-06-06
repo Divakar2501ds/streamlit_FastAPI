@@ -1,5 +1,7 @@
 import streamlit as st
 import requests
+from pages.token import check_token
+from streamlit_autorefresh import st_autorefresh
 from config import config_url
 hide_sidebar_style = """
     <style>
@@ -9,6 +11,13 @@ hide_sidebar_style = """
     </style>
 """
 st.markdown(hide_sidebar_style, unsafe_allow_html=True)
+
+
+st_autorefresh(interval=60 * 1000, key="auth_check")
+token =  st.session_state.get("access_token")
+check_token()
+headers = {"Authorization": f"Bearer {token}"}
+
 
 if "category_id" not in st.session_state:
     st.error("No category selected. Go back to the category page.")
@@ -24,9 +33,9 @@ with col_left:
 category_id = st.session_state["category_id"]
 current_name = st.session_state.get("category_name", "")
 
-st.title(f"Update Category: {current_name}")
+st.title(f"Update Category: ")
 
-new_name = st.text_input("New Category Name")
+new_name = st.text_input("New Category Name",value=current_name)
 new_image = st.file_uploader("New Category Image", type=["jpg", "jpeg", "png", "webp"])
 if st.button("Update Category", key=f"update_category_btn_{category_id}"):
         if not new_name or not new_image:
@@ -42,9 +51,10 @@ if st.button("Update Category", key=f"update_category_btn_{category_id}"):
             response = requests.patch(
                 f"{config_url}/categories/{category_id}",
                 data=data,
-                files=files
+                files=files ,
+                headers=headers
             )
-
+            
             if response.status_code == 200:
                 st.success("Category updated successfully!")
             else:

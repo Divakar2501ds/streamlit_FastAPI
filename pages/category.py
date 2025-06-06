@@ -5,6 +5,7 @@ import time
 from PIL import Image
 from io import BytesIO
 import os
+from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(layout="wide")
 hide_sidebar_style = """
@@ -16,6 +17,26 @@ hide_sidebar_style = """
 """
 st.markdown(hide_sidebar_style, unsafe_allow_html=True)
 
+st_autorefresh(interval=60 * 1000, key="auth_check")
+
+token =  st.session_state.get("access_token")
+if not token:
+    st.error("Session Expired")
+    if st.button("Go back to login"):
+        st.switch_page("pages/Login.py")
+    st.stop()
+
+
+headers = {"Authorization": f"Bearer {token}"}
+response = requests.get(f"{config_url}/protected", headers=headers)
+if response.status_code != 200:
+    st.error("Session expired. Please log in again.")
+    st.error("Session Expired")
+    if st.button("Go back to login"):
+        st.switch_page("pages/Login.py")
+    st.stop()
+
+
 
 user_id = st.session_state.get("user_id")
 if not user_id:
@@ -24,17 +45,36 @@ if not user_id:
         st.switch_page("pages/Login.py")
     st.stop()
 
-st.session_state["user_id"] = user_id
-st.query_params["user_id"] = user_id
+
+
+col_left, col_spacer, col_right = st.columns([2, 6, 4])
+
+with col_right:
+    col_add, col_update = st.columns([1, 1])
+    with col_add:
+        if st.button("View Your Cart", use_container_width=True):
+            st.switch_page("pages/Cart.py")
+
+
 
 if st.button("Add Category", key="add_cat_btn"):
     st.switch_page("pages/add_category.py")
 st.title(" Categories")
 
 try:
-    response = requests.get(f"{config_url}/categories")
-    response.raise_for_status()
-    categories = response.json()
+    headers = {"Authorization": f"Bearer {token}"}
+    response = requests.get(f"{config_url}/categories",headers=headers)
+
+    if response.status_code != 200:
+        st.error("Session expired.")
+        st.session_state.clear()
+        if st.button("Go to Login"):
+            st.switch_page("pages/Login.py")
+        st.stop()
+
+    json_data = response.json()
+    categories = json_data["data"]
+
     cols = st.columns(3)
     for idx, cat in enumerate(categories):
         col = cols[idx % 3]
@@ -61,16 +101,15 @@ try:
             with col1:
                 if st.button("View Products", key=f"view_{cat_id}"):
                     st.session_state["category_id"] = cat_id
-                    st.query_params["category_id"]=cat_id
                     st.switch_page("pages/Product.py")
             with col2:
                 if st.button("Delete Category",key=f"delete_category_btn{cat_id}"):
-                    response1 = requests.delete(f"{config_url}/delete_category/{category_id}")
+                    response1 = requests.delete(f"{config_url}/delete_category/{category_id}",headers=headers)
                     if response1.status_code == 200:
                         st.success("Deleted category successfully")
                     else:
                         st.error("The category is in the cart ,it cannot be deleted ")
-                        time.sleep(2)
+                        # time.sleep(2)
                         st.rerun()
             with col3:
                 if st.button("update category",key=f"update_category_btn{cat_id}"):

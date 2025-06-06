@@ -4,6 +4,7 @@ from PIL import Image
 import time
 from io import BytesIO
 from config import config_url
+from pages.token import check_token
 st.set_page_config(layout="wide")
 hide_sidebar_style = """
     <style>
@@ -13,6 +14,9 @@ hide_sidebar_style = """
     </style>
 """
 st.markdown(hide_sidebar_style, unsafe_allow_html=True)
+token = st.session_state.get("access_token")
+
+check_token()
 
 query_params = st.query_params
 product_id = query_params.get("product_id", [None])[0]
@@ -34,14 +38,7 @@ if product_id is None:
     st.stop()
 
 
-st.session_state["category_id"] = category_id
-st.session_state["product_id"] = product_id
-st.query_params["product_id"] = product_id
-
-
 col_left, col_spacer, col_right = st.columns([2, 6, 4])
-
-
 with col_left:
     if st.button("⬅ Go Back to Products", use_container_width=True):
         st.switch_page("pages/Product.py")
@@ -49,18 +46,16 @@ with col_left:
 product_id = st.session_state.get("product_id")
 user_id = st.session_state.get("user_id")
 
-
-
 if user_id is None:
     st.error("Go back to login")
     if st.button("Login"):
         st.switch_page("pages/Login.py")
 
-
-response =  requests.get(f"{config_url}/products/product/{product_id}")
+headers = {"Authorization": f"Bearer {token}"}
+response =  requests.get(f"{config_url}/products/product/{product_id}",headers=headers)
 if response.status_code == 200:
-    product = response.json()
-    
+    response_data = response.json()
+    product =  response_data["data"]
     raw_img_path = product.get("image_url")
 
     image_url = f"{config_url}{raw_img_path}"
@@ -90,7 +85,7 @@ if response.status_code == 200:
         }
 
             try:
-                response1 = requests.post(f"{config_url}/add_to_cart", params=params)
+                response1 = requests.post(f"{config_url}/add_to_cart", params=params , headers=headers)
 
                 if response1.status_code == 200:
                     data = response1.json()

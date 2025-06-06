@@ -4,7 +4,8 @@ from PIL import Image
 from io import BytesIO
 import streamlit as st
 from config import config_url
-
+import time 
+from streamlit_autorefresh import st_autorefresh
 st.set_page_config(layout="wide")
 hide_sidebar_style = """
     <style>
@@ -15,7 +16,35 @@ hide_sidebar_style = """
 """
 st.markdown(hide_sidebar_style, unsafe_allow_html=True)
 
+
+st_autorefresh(interval=60 * 1000, key="auth_check")
+
+token =  st.session_state.get("access_token")
+if not token:
+    st.error("Session Expired")
+    if st.button("Go back to login"):
+        st.switch_page("pages/Login.py")
+    st.stop()
+
+
+headers = {"Authorization": f"Bearer {token}"}
+response = requests.get(f"{config_url}/protected", headers=headers)
+if response.status_code != 200:
+    st.error("Session expired. Please log in again.")
+    st.error("Session Expired")
+    if st.button("Go back to login"):
+        st.switch_page("pages/Login.py")
+    st.stop()
+
 category_id = st.query_params.get("category_id", [None])[0]
+user_id = st.session_state.get("user_id")
+
+
+if not user_id:
+    st.error("🚫 Please log in to continue.")
+    if st.button("Go back to login"):
+        st.switch_page("pages/Login.py")
+    st.stop()
 
 if category_id is None:
     category_id = st.session_state.get("category_id")
@@ -25,10 +54,6 @@ if category_id is None:
     if st.button("Login"):
         st.switch_page("pages/Login.py")
     st.stop()
-
-st.session_state["category_id"] = category_id
-
-st.query_params["category_id"] = category_id
 
 
 
@@ -49,12 +74,13 @@ with col_right:
 st.title(" Products")
 
 try:
-        category_id = st.session_state.get("category_id")
+        headers = {"Authorization": f"Bearer {token}"}
 
     
-        response = requests.get(f"{config_url}/products/category/{category_id}")
+        response = requests.get(f"{config_url}/products/category/{category_id}",headers=headers)
         response.raise_for_status()
-        products = response.json()
+        jsondata = response.json()
+        products = jsondata["data"]
 
         cols_per_row = 3
 
@@ -87,6 +113,10 @@ try:
                             st.session_state["product_id"] = product["product_id"]
                             st.query_params["product_id"] = product["product_id"]
                             st.switch_page("pages/Product_details.py")
+                        if st.button("Update product", key =f"update_{product['product_id']}"):
+                            st.session_state["product_id"] = product["product_id"]
+                            st.query_params["product_id"] = product["product_id"]
+                            st.switch_page("pages/update_product.py")
 
 except requests.RequestException as e:
         st.error(f"Failed to fetch products: {e}")

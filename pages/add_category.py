@@ -1,6 +1,9 @@
 import streamlit as st
 import requests
+import time
+from streamlit_autorefresh import st_autorefresh
 from config import config_url
+from pages.token import check_token
 st.set_page_config(layout="wide")
 hide_sidebar_style = """
     <style>
@@ -12,9 +15,14 @@ hide_sidebar_style = """
 st.markdown(hide_sidebar_style, unsafe_allow_html=True)
 
 
+st_autorefresh(interval=60 * 1000, key="auth_check")
+token =  st.session_state.get("access_token")
+check_token()
+headers = {"Authorization": f"Bearer {token}"}
+
+
 
 col_left, col_spacer, col_right = st.columns([2, 6, 4])
-
 
 with col_left:
     if st.button("⬅ Go Back to Category", use_container_width=True):
@@ -34,9 +42,11 @@ if st.button("Submit"):
             "category_name": category_name
         }
         try:
-            res = requests.post(f"{config_url}/add_category", data=data, files=files)
+            res = requests.post(f"{config_url}/add_category", data=data, files=files , headers=headers)
             if res.status_code == 200:
                 st.success("Category added successfully!")
+                time.sleep(1)
+                st.switch_page("pages/category.py")
             else:
                 st.error(res.json())
         except Exception as e:

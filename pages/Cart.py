@@ -3,7 +3,9 @@ import requests
 from PIL import Image
 from io import BytesIO
 import requests
-import time
+from streamlit_autorefresh import st_autorefresh
+import time 
+from pages.token import check_token
 from config import config_url
 hide_sidebar_style = """
     <style>
@@ -14,6 +16,10 @@ hide_sidebar_style = """
 """
 st.markdown(hide_sidebar_style, unsafe_allow_html=True)
 
+st_autorefresh(interval=60 * 1000, key="auth_check")
+token =  st.session_state.get("access_token")
+check_token()
+
 user_id = st.session_state.get("user_id")
 if not user_id:
     st.error("You must be logged in to view your cart.")
@@ -21,9 +27,9 @@ if not user_id:
         st.switch_page("pages/Login.py")
 
     st.stop()
+
+
 col_left, col_spacer, col_right = st.columns([2, 6, 4])
-
-
 with col_left:
     if st.button("⬅ Go Back to Category", use_container_width=True):
         st.switch_page("pages/category.py")
@@ -34,9 +40,12 @@ category_id = query_params.get("category_id", [None])[0]
 st.title(" Your Cart")
 
 try:
-    response = requests.get(f"{config_url}/cart", params={"user_id": user_id})
+    headers = {"Authorization": f"Bearer {token}"}
+    response = requests.get(f"{config_url}/cart", params={"user_id": user_id},headers=headers)
     response.raise_for_status()
-    cart_items = response.json()
+    response_data = response.json()
+    cart_items = response_data["data"]
+
     if not cart_items:
         st.info("Your cart is empty.")
     else:
@@ -80,7 +89,7 @@ try:
                                 "product_id": product_id,
                                 "category_id": category_id
 
-                            })
+                            }, headers=headers)
                             if del_response.status_code == 200:
                                 st.success("Item deleted!")
                                 st.rerun()
@@ -97,7 +106,7 @@ try:
                                 "product_id": product_id,
                                 "quantity": qty_input,
                                 "category_id": category_id 
-                            })
+                            },headers=headers)
                             if patch_response.status_code == 200:
                                 st.success("Quantity updated!")
                                 time.sleep(1)

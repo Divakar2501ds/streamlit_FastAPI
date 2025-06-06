@@ -5,6 +5,7 @@ from database.database import Base
 
 class User(Base):
     __tablename__ = "user"
+    
     id = Column(Integer, primary_key=True, index=True)
     role = Column(String, nullable=False)
     email =  Column(String, unique=True, nullable=False, index=True)
@@ -35,9 +36,6 @@ class Product(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     category = relationship("Category", back_populates="products")
-
-
-
 
 class Cart(Base):
     __tablename__ = "cart__items"
